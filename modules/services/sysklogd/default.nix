@@ -14,7 +14,7 @@ in
     finit.services.syslogd = {
       description = "system logging daemon";
       runlevels = "S0123456789";
-      conditions = "run/udevadm:5/success";
+      conditions = lib.optionals config.services.udev.enable [ "run/udevadm:5/success" ] ++ lib.optionals config.services.mdevd.enable [ "run/coldplug/success" ];
       command = "${pkgs.sysklogd}/bin/syslogd -F";
     };
 
