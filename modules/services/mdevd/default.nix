@@ -111,6 +111,37 @@ in
         }
     ];
 
+    finit.services.mdevd = {
+      description = "device event daemon (mdevd)";
+      command = "${getExe cfg.package} -O 4 -D %n -f ${(config.services.mdevd.hotplugRules |> lib.concatLines |> pkgs.writeText "mdev.conf")}";
+      runlevels = "S12345789";
+      cgroup.name = "init";
+      notify = "s6";
+    };
+
+    finit.run.coldplug = {
+      description = "cold plugging system";
+      command = getExe' cfg.package "mdevd-coldplug";
+      runlevels = "S";
+      conditions = "service/mdevd/ready";
+      cgroup.name = "init";
+    };
+
+    # TODO: share between udev and mdevd
+    system.activation.scripts.mdevd = lib.mkIf config.boot.kernel.enable {
+      text = ''
+        # The deprecated hotplug uevent helper is not used anymore
+        if [ -e /proc/sys/kernel/hotplug ]; then
+          echo "" > /proc/sys/kernel/hotplug
+        fi
+
+        # Allow the kernel to find our firmware.
+        if [ -e /sys/module/firmware_class/parameters/path ]; then
+          echo -n "${config.hardware.firmware}/lib/firmware" > /sys/module/firmware_class/parameters/path
+        fi
+      '';
+    };
+
     # Start a hotpluging mdevd after the stage-2 init.
     synit.core.daemons.mdevd = {
       argv = [
