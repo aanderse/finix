@@ -14,17 +14,7 @@ let
     rawStrings = true;
   };
 
-  profileConfigFile =
-    let drv = preserves.generate "profile.pr" cfg.config;
-    in drv.overrideAttrs ({ ... }: {
-      postBuild = ''
-        # Assert that this profile has been loaded.
-        hash=$(basename $out)
-        echo "<synit-profile \"${config.networking.hostName}-''${hash:0:12}\" loaded>" >> $out
-      '';
-    });
-
-  profileHash = with builtins; profileConfigFile
+  profileHash = with builtins; cfg.file
     |> toString |> baseNameOf |> substring 0 12;
 
 in
@@ -44,19 +34,39 @@ in
           comprises a system configuration profile.
         '';
         # TODO: List of Preserves type.
+        type = with lib.types; listOf anything;
+      };
+      file = mkOption {
+        description = ''
+          The file that defines the Synit profile.
+        '';
+        readOnly = true;
       };
     };
   };
 
   config = mkIf config.synit.enable {
-    synit.profile.name = "${config.networking.hostName}-${profileHash}";
+
+    synit.profile = {
+      name = "${config.networking.hostName}-${profileHash}";
+      file =
+        let drv = preserves.generate "profile.pr" cfg.config;
+        in drv.overrideAttrs ({ ... }: {
+          postBuild = ''
+            # Assert that this profile has been loaded.
+            hash=$(basename $out)
+            echo "<synit-profile \"${config.networking.hostName}-''${hash:0:12}\" loaded>" >> $out
+          '';
+        });
+    };
+
     system.activation.scripts.synit-profile = {
       deps = [ "synit-config" ];
       text = ''
         mkdir -p /run/synit/config/profile/
 
         # Load the profile.
-        echo '<synit-profile "${cfg.name}" load "${profileConfigFile}">' > /run/synit/config/profile/load-${profileHash}.pr
+        echo '<synit-profile "${cfg.name}" load "${cfg.file}">' > /run/synit/config/profile/load-${profileHash}.pr
 
         # Activate the profile.
         echo '<synit-profile "${cfg.name}" activate>' >/run/synit/config/profile/activate-profile.pr

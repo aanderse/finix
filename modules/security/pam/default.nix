@@ -48,7 +48,7 @@ in
         };
 
         env = {
-          "pam/environment".text = ''
+          "security/pam_env.conf".text = ''
             PATH                        DEFAULT="${config.security.wrapperDir}:/run/current-system/sw/bin"
             NIX_REMOTE                  DEFAULT="daemon"
             EDITOR                      DEFAULT="micro"

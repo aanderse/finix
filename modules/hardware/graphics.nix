@@ -11,6 +11,8 @@ let
     name = "graphics-drivers-32bit";
     paths = [ cfg.package32 ] ++ cfg.extraPackages32;
   };
+
+  gidOf = name: toString config.ids.gids.${name};
 in
 {
   options.hardware.graphics = {
@@ -96,11 +98,24 @@ in
       }
     ];
 
+    services.mdevd.hotplugRules = "dri/* 0:${gidOf "video"} 660";
+
     services.tmpfiles.graphics.rules = [
       "L+ /run/opengl-driver - - - - ${driversEnv}"
     ] ++ lib.optionals cfg.enable32Bit [
       "L+ /run/opengl-driver-32 - - - - ${driversEnv32}"
     ];
+
+    synit.daemons.opengl-driver = {
+      argv = lib.optionals cfg.enable32Bit [
+        "foreground" "s6-ln" "-sf" driversEnv32 "/run/opengl-driver-32" ""
+      ] ++ [
+        "s6-ln" "-sf" driversEnv "/run/opengl-driver"
+      ];
+      restart = "on-error";
+      logging.enable = lib.mkDefault false;
+      provides = [ [ "milestone" "graphics" ] ];
+    };
 
     hardware.graphics.package = lib.mkDefault pkgs.mesa;
     hardware.graphics.package32 = lib.mkDefault pkgs.pkgsi686Linux.mesa;

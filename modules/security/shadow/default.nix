@@ -35,7 +35,7 @@ in
         password sufficient pam_unix.so nullok yescrypt # unix (order 10200)
 
         # Session management.
-        session required pam_env.so conffile=/etc/pam/environment readenv=0 # env (order 10100)
+        session required pam_env.so readenv=0 # env (order 10100)
         session required pam_unix.so # unix (order 10200)
         session required pam_loginuid.so # loginuid (order 10300)
         session required ${pkgs.linux-pam}/lib/security/pam_lastlog.so silent # lastlog (order 10700)
@@ -60,7 +60,7 @@ in
         password sufficient pam_unix.so nullok yescrypt # unix (order 10200)
 
         # Session management.
-        session required pam_env.so conffile=/etc/pam/environment readenv=0 # env (order 10100)
+        session required pam_env.so readenv=0 # env (order 10100)
         session required pam_unix.so # unix (order 10200)
         session optional pam_xauth.so systemuser=99 xauthpath=${pkgs.xorg.xauth}/bin/xauth # xauth (order 12100)
       '';
@@ -79,7 +79,7 @@ in
         password sufficient pam_unix.so nullok yescrypt # unix (order 10200)
 
         # Session management.
-        session required pam_env.so conffile=/etc/pam/environment readenv=0 # env (order 10100)
+        session required pam_env.so readenv=0 # env (order 10100)
         session required pam_unix.so # unix (order 10200)
       '';
     };

@@ -299,6 +299,12 @@ in
       "L+ /nix/var/nix/gcroots/current-system - - - - /run/current-system"
     ];
 
+    synit.daemons.nix-daemon = {
+      argv = [ "${cfg.package}/bin/nix-daemon" "--daemon" ];
+      path = [ pkgs.openssh cfg.package ];
+      requires = [ { key = [ "milestone" "network" ]; } ];
+    };
+
     users.users = lib.listToAttrs (map (nr: {
       name = "nixbld${toString nr}";
       value = {

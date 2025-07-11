@@ -25,7 +25,7 @@ in
           }
           ${pkgs.iproute2}/bin/ip --json link show $INTERFACE
         '';
-      in [ "-SUBSYSTEM=net;DEVPATH=.*/net/*;.* 0:0 600 &${netScript}" ];
+      in "-SUBSYSTEM=net;DEVPATH=.*/net/*;.* 0:0 600 &${netScript}";
 
     # A Tcl script responds to assertions in the 
     # network dataspace by executing iproute2 commands

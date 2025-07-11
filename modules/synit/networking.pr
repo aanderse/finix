@@ -16,3 +16,7 @@ $machine += <Observe <bind <group <rec route> {}>> $reflectServiceState>
 # Bring up the network milestone after acquiring an address and route.
 <depends-on <milestone network> <service-state <address> up>>
 <depends-on <milestone network> <service-state <route> up>>
+
+# Assign addresses to the loopback device.
+$network += <address lo ipv4 { "local": "127.0.0.1" "prefixlen": 8 }>
+$network += <address lo ipv6 { "local": "::1" "prefixlen": 128 }>

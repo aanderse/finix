@@ -249,7 +249,7 @@ in
         password sufficient pam_unix.so nullok yescrypt debug # unix (order 10200)
 
         # Session management.
-        session required pam_env.so conffile=/etc/pam/environment readenv=0 debug # env (order 10100)
+        session required pam_env.so readenv=0 debug # env (order 10100)
         session required pam_unix.so debug # unix (order 10200)
 
         ${lib.optionalString config.services.elogind.enable "session optional ${pkgs.elogind}/lib/security/pam_elogind.so"}
@@ -267,6 +267,25 @@ in
     services.tmpfiles.sshd.rules = [
       "d /var/lib/sshd 0755"
     ];
+
+    synit.daemons.sshd = {
+      argv = let
+        keygenScript = pkgs.execline.passthru.writeScript "ssh-keygen.el" "-s0" ''
+          foreground { s6-mkdir -m 0755 -p /var/lib/sshd }
+          foreground {
+            if -n { eltest -s "/var/lib/sshd/ssh_host_ed25519_key" }
+            ssh-keygen -t ed25519 -f "/var/lib/sshd/ssh_host_ed25519_key" -N ""
+          }
+          $@
+        '';
+      in [
+        keygenScript
+        "${cfg.package}/bin/sshd" "-D" "-e" "-f" "/etc/ssh/sshd_config"
+      ];
+      path = [ cfg.package ];
+      provides = [ [ "milestone" "login" ] ];
+      requires = [ { key = [ "milestone" "network" ]; } ];
+    };
 
     users.users.sshd = {
       group = "sshd";

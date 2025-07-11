@@ -60,6 +60,17 @@ in
       # "f /var/lib/chrony/chrony.rtc 0640 chrony chrony - -"
     ];
 
+    synit.daemons.chronyd = {
+      argv = [
+        "s6-envuidgid" "chrony"
+        "foreground" "s6-mkdir" "-m" "750" "/var/lib/chrony" ""
+        "foreground" "s6-chown" "-U" "/var/lib/chrony" ""
+        "chronyd" "-d" "-u" "chrony" "-f" cfg.configFile
+      ];
+      path = [ cfg.package ];
+      requires = [ { key = [ "milestone" "network" ]; } ];
+    };
+
     users.users = {
       chrony = {
         uid = config.ids.uids.chrony;

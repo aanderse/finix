@@ -156,6 +156,32 @@ let
         then mkSetcapProgram opts
         else mkSetuidProgram opts
       ) (lib.attrValues wrappers);
+
+  wrappersScript = pkgs.writeShellScript "suid-sgid-wrappers.sh" ''
+      set -e
+      # We want to place the tmpdirs for the wrappers to the parent dir.
+      mkdir -p "${parentWrapperDir}"
+      wrapperDir=$(mktemp --directory --tmpdir="${parentWrapperDir}" wrappers.XXXXXXXXXX)
+      chmod a+rx "$wrapperDir"
+
+      ${lib.concatStringsSep "\n" mkWrappedPrograms}
+
+      if [ -L ${wrapperDir} ]; then
+        # Atomically replace the symlink
+        # See https://axialcorps.com/2013/07/03/atomically-replacing-files-and-directories/
+        old=$(readlink -f ${wrapperDir})
+        if [ -e "${wrapperDir}-tmp" ]; then
+          rm --force --recursive "${wrapperDir}-tmp"
+        fi
+        ln --symbolic --force --no-dereference "$wrapperDir" "${wrapperDir}-tmp"
+        mv --no-target-directory "${wrapperDir}-tmp" "${wrapperDir}"
+        rm --force --recursive "$old"
+      else
+        # For initial setup
+        ln --symbolic "$wrapperDir" "${wrapperDir}"
+      fi
+    '';
+
 in
 {
   ###### interface
@@ -222,28 +248,22 @@ in
       description = "create suid/sgid wrappers";
       runlevels = "S12345";
       log = true;
-      command = pkgs.writeShellScript "suid-sgid-wrappers.sh" ''
-        # We want to place the tmpdirs for the wrappers to the parent dir.
-        wrapperDir=$(mktemp --directory --tmpdir="${parentWrapperDir}" wrappers.XXXXXXXXXX)
-        chmod a+rx "$wrapperDir"
+      command = wrappersScript;
+    };
 
-        ${lib.concatStringsSep "\n" mkWrappedPrograms}
+    synit.milestones.wrappers = { };
 
-        if [ -L ${wrapperDir} ]; then
-          # Atomically replace the symlink
-          # See https://axialcorps.com/2013/07/03/atomically-replacing-files-and-directories/
-          old=$(readlink -f ${wrapperDir})
-          if [ -e "${wrapperDir}-tmp" ]; then
-            rm --force --recursive "${wrapperDir}-tmp"
-          fi
-          ln --symbolic --force --no-dereference "$wrapperDir" "${wrapperDir}-tmp"
-          mv --no-target-directory "${wrapperDir}-tmp" "${wrapperDir}"
-          rm --force --recursive "$old"
-        else
-          # For initial setup
-          ln --symbolic "$wrapperDir" "${wrapperDir}"
-        fi
-      '';
+    synit.daemons.suid-sgid-wrappers = {
+      argv = [
+        "if" wrappersScript ""
+        "redirfd" "-w" "1" "/run/synit/config/state/suid-sgid-wrappers.pr"
+        "echo" "<service-state <daemon suid-sgid-wrappers> ready>"
+      ];
+      path = [ pkgs.coreutils ];
+      restart = "on-error";
+      readyOnStart = false;
+      logging.enable = lib.mkDefault false;
+      provides = [ [ "milestone" "wrappers" ] ];
     };
   };
 }
