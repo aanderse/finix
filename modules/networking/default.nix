@@ -1,6 +1,61 @@
 { config, pkgs, lib, ... }:
 let
   cfg = config.networking;
+
+  deviceOpt = lib.mkOption {
+    type = lib.types.str;
+    description = "Network attachment device.";
+    example = "eth0";
+  };
+
+  prefixLengthOpt = lib.mkOption {
+    type = lib.types.int;
+    description = "Network prefix length.";
+  };
+
+  addressesSubmodule = addrLen: {
+    options = {
+      device = deviceOpt;
+
+      local = lib.mkOption {
+        type = lib.types.str;
+        description = "Local address.";
+      };
+
+      prefixLength = prefixLengthOpt // {
+        default = addrLen;
+      };
+    };
+  };
+
+  routeSubmodule = lib.types.submodule {
+    options = {
+      device = deviceOpt;
+
+      gateway = lib.mkOption {
+        type = with lib.types; nullOr str;
+        default = null;
+        description = "Network gateway to use as a default route.";
+      };
+
+      prefix = lib.mkOption {
+        type = with lib.types; nullOr str;
+        description = "Route addressing prefix.";
+        default = null;
+      };
+      prefixLength = prefixLengthOpt // {
+        type = lib.types.nullOr prefixLengthOpt.type;
+        default = null;
+      };
+    };
+  };
+
+  mkListOfSubmodule = attrs:
+    lib.mkOption {
+      type = with lib.types; listOf (submodule attrs);
+      default = [ ];
+    };
+
 in
 {
   options.networking = {
@@ -21,6 +76,37 @@ in
         Locally defined maps of hostnames to IP addresses.
       '';
     };
+
+    ipv4 = {
+      addresses = mkListOfSubmodule (addressesSubmodule 32 // {
+        example = [
+          { device = "eth0"; local = "192.0.2.7"; prefixLength = 24; }
+          { device = "eth1"; local = "203.0.113.175"; prefixLength = 32; }
+        ];
+      });
+      routes = mkListOfSubmodule (routeSubmodule // {
+        example = [
+          { device = "eth0"; prefix = "192.0.2.0"; prefixLengh = 24; }
+          { device = "eth0"; gateway = "192.0.2.1"; }
+        ];
+      });
+    };
+
+    ipv6 = {
+      addresses = mkListOfSubmodule (addressesSubmodule 128 // {
+        example = [
+          { device = "eth0"; local = "2001:db8:1::3"; prefixLength = 64; }
+          { device = "eth1"; local = "fd12:3456::7"; prefixLength = 48; }
+        ];
+      });
+      routes = mkListOfSubmodule (routeSubmodule // {
+        example = [
+          { device = "eth0"; prefix = "2001:db8:1::"; prefixLengh = 64; }
+          { device = "eth0"; gateway = "2001:db8:1::1"; }
+        ];
+      });
+    };
+
   };
 
   config = {
