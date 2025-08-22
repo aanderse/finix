@@ -5,8 +5,8 @@ let
   # Sort and join the command-line of PID 1.
   pid1Argv =
     (lib.textClosureList cfg.pid1.argv (builtins.attrNames cfg.pid1.argv))
-    |> lib.flatten
-    |> lib.escapeShellArgs;
+    |> lib.concatLists
+    |> lib.concatMapStringsSep "\n" lib.escapeExeclineArg;
 in
 {
   # TODO: something not quite sitting right with me here
@@ -49,27 +49,31 @@ in
 
   config = {
 
-    # Set the environment via argv.
-    boot.init.pid1.argv.env.text = cfg.pid1.env
-      |> builtins.attrNames
-      |> lib.concatMap (key: [ "${pkgs.execline}/bin/export" key cfg.pid1.env.${key} ]);
+    boot.init.pid1.argv = {
+      # Set the environment via argv.
+      env.text = cfg.pid1.env
+        |> builtins.attrNames
+        |> lib.concatMap (key: [ "export" key cfg.pid1.env.${key} ]);
 
-    boot.init.script = pkgs.writeScript "init" ''
-      #!${pkgs.runtimeShell}
+      # How "@systemConfig@/activate" is called is declared elsewhere.
+      activation.deps = [ "env" ];
+    };
 
-      systemConfig='@systemConfig@'
+    boot.init.script = pkgs.execline.passthru.writeScript "init" "-P" ''
+      background {
+        ${pkgs.s6-portable-utils}/bin/s6-echo "\n[1;32m<<< finix - stage 2 >>>[0m\n"
+      }
 
-      echo
-      echo "[1;32m<<< finix - stage 2 >>>[0m"
-      echo
+      # Record the boot configuration.
+      # Create /run/current-system so that activation
+      # always happens with a valid symlink there.
+      background {
+        forx -E -p DIR { /run/booted-system /run/current-system }
+        ${pkgs.s6-portable-utils}/bin/s6-ln -s -f -n "@systemConfig@" $DIR
+      }
 
-      echo "running activation script..."
-      $systemConfig/activate
-
-      # record the boot configuration.
-      ${pkgs.coreutils}/bin/ln -sfn "$systemConfig" /run/booted-system
-
-      exec ${pid1Argv} $@
+      wait { }
+      ${pid1Argv}
     '';
   };
 }

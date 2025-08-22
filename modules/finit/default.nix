@@ -619,9 +619,19 @@ in
               pkgs.util-linux.mount
             ] ++ fsPackages);
         };
-        argv.finit = {
-          deps = [ "env" ];
-          text = "${config.finit.package}/bin/finit";
+        argv = {
+          # Initial profile activation.
+          activation = {
+            text = lib.quoteExecline [
+              "foreground" [ "@systemConfig@/activate" ]
+            ];
+          };
+          pid1 = {
+            deps = [ "env" "activation" ];
+            text = [
+              "${config.finit.package}/bin/finit"
+            ];
+          };
         };
     };
 

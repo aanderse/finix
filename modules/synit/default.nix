@@ -12,6 +12,7 @@ let
     mkIf
     mkOption
     optionals
+    quoteExecline
     ;
 
   writeExeclineScript = pkgs.execline.passthru.writeScript;
@@ -66,21 +67,34 @@ in
         PATH = makeBinPath synitPackages;
       };
       argv = {
-        synit-pid1 = {
-          deps = [ "env" ];
-          text = getExe cfg.pid1.package;
+
+        activation = {
+          text = quoteExecline [
+            "foreground" [
+              "@systemConfig@/activate"
+            ]
+          ];
         };
+
+        pid1 = {
+          deps = [ "activation" ];
+          text = [
+            (getExe cfg.pid1.package)
+          ];
+        };
+
         logger = {
-          deps = [ "synit-pid1" ];
-          text = mkDefault (optionals cfg.logging.logToFileSystem (lib.quoteExecline [
+          deps = [  "pid1" ];
+          text = mkDefault (optionals cfg.logging.logToFileSystem (quoteExecline [
             "foreground" [ "s6-mkdir" "-p" "/var/log/synit" ]
             "fdswap" "1" "2"
             "pipeline" "-w" [ "s6-log" "/var/log/synit" ]
             "fdswap" "1" "2"
           ]));
         };
+
         syndicate-server = {
-          deps = [ "logger" ];
+          deps = [ "activation" "logger" ];
           text = mkDefault [
             "syndicate-server"
             "--inferior"
@@ -92,7 +106,7 @@ in
             "--config" "${./boot.pr}"
           ];
         };
-        };
+      };
     };
 
     environment.systemPackages = synitPackages ++ [
@@ -105,7 +119,7 @@ in
     system.activation.scripts.synitConfig = {
       deps = [ "specialfs" ];
       text = ''
-        for D in /etc/syndicate/core /run/synit/{config/{core,machine,network,profile,state}}; do
+        for D in /etc/syndicate/core /run/synit/config/{core,machine,network,profile,state}; do
           s6-mkdir -m 750 -p $D
           s6-chown -g 1 $D
         done
