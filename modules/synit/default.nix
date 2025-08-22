@@ -67,17 +67,8 @@ in
         PATH = makeBinPath synitPackages;
       };
       argv = {
-
-        activation = {
-          text = quoteExecline [
-            "foreground" [
-              "@systemConfig@/activate"
-            ]
-          ];
-        };
-
         pid1 = {
-          deps = [ "activation" ];
+          deps = [ "env" ];
           text = [
             (getExe cfg.pid1.package)
           ];
@@ -91,6 +82,20 @@ in
             "pipeline" "-w" [ "s6-log" "/var/log/synit" ]
             "fdswap" "1" "2"
           ]));
+        };
+
+        # Activate as a child of PID 1.
+        activation = {
+          deps = [ "logger" "pid1" ];
+          text = quoteExecline [
+            "foreground" [
+              # Stdio is reserved for communication
+              # between PID 1 and the system-bus.
+              "fdclose" "0"
+              "fdmove" "-c" "1" "2"
+              "@systemConfig@/activate"
+            ]
+          ];
         };
 
         syndicate-server = {
