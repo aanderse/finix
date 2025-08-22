@@ -10,6 +10,13 @@ rec {
     else [ arg ]
   )) [ ];
 
+  escapeExeclineArg = arg:
+    let string = toString arg; in
+    if lib.match "[[:alnum:],._+:@%/-]+" string == null then
+      ''"${lib.replaceString ''"'' ''\"'' string}"''
+    else
+     string;
+
   generators = prev.generators // {
     toPreserves = import ./generators/preserves.nix { inherit lib; };
   };

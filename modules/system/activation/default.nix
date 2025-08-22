@@ -69,16 +69,22 @@ in
   config = {
     system.activation.out =
       let
-        set' = lib.mapAttrs (a: v:
-          v // {
+        set' = lib.mapAttrs (a: {deps, text}:
+          {
+            inherit deps;
             text = ''
               #### Activation script snippet ${a}:
-              _localstatus=0
-              ${v.text}
+              ${lib.optionalString (deps != []) "wait${lib.concatMapStrings (d: " $PID_" + d) deps}"}
+              (
+              ${text}
+              status=$?
 
-              if (( _localstatus > 0 )); then
-                printf "Activation script snippet '%s' failed (%s)\n" "${a}" "$_localstatus"
+              if (( status > 0 )); then
+                echo "Activation script snippet '${a}' failed ($status)" >>$ERROR_FILE
               fi
+              ) &
+
+              PID_${a}=$!
             '';
           }
         ) config.system.activation.scripts;
@@ -93,13 +99,15 @@ in
               PATH=$PATH:$i/bin:$i/sbin
           done
 
-          _status=0
-          trap "_status=1 _localstatus=\$?" ERR
-
           # Ensure a consistent umask.
           umask 0022
 
+          ERROR_FILE=$(s6-uniquename /run/activation-errors)
+
           ${lib.textClosureMap lib.id set' (lib.attrNames set')}
+
+          # Wait for all children to exit.
+          wait
 
           # Make this configuration the current configuration.
           # The readlink is there to ensure that when $systemConfig = /system
@@ -107,13 +115,17 @@ in
           # used as a garbage collection root.
           ln -sfn "$(readlink -f "$systemConfig")" /run/current-system
 
-          exit $_status
+          if [ -f "$ERROR_FILE" ]; then
+            cat $ERROR_FILE
+            rm $ERROR_FILE
+            exit 1
+          fi
         '';
 
     system.activation.scripts.specialfs = ''
       echo "specialfs stub here..."
       mkdir -p /bin /etc /run /tmp /usr /var/{cache,db,empty,lib,log,spool}
-      [ ! -e /var/run ] && ln -s -n /run/ var/run
+      [ ! -e /var/run ] && ln -s -n /run /var/run
     '';
 
     system.activation.path = with pkgs; map lib.getBin [
@@ -125,6 +137,7 @@ in
       shadow
       nettools # needed for hostname
       util-linux # needed for mount and mountpoint
+      s6-portable-utils # s6-ln, s6-uniquename
     ];
 
     system.topLevel =  checkAssertWarn (pkgs.stdenvNoCC.mkDerivation {

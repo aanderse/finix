@@ -12,6 +12,7 @@ let
     mkIf
     mkOption
     optionals
+    quoteExecline
     ;
 
   writeExeclineScript = pkgs.execline.passthru.writeScript;
@@ -66,21 +67,39 @@ in
         PATH = makeBinPath synitPackages;
       };
       argv = {
-        synit-pid1 = {
+        pid1 = {
           deps = [ "env" ];
-          text = getExe cfg.pid1.package;
+          text = [
+            (getExe cfg.pid1.package)
+          ];
         };
+
         logger = {
-          deps = [ "synit-pid1" ];
-          text = mkDefault (optionals cfg.logging.logToFileSystem (lib.quoteExecline [
+          deps = [  "pid1" ];
+          text = mkDefault (optionals cfg.logging.logToFileSystem (quoteExecline [
             "foreground" [ "s6-mkdir" "-p" "/var/log/synit" ]
             "fdswap" "1" "2"
             "pipeline" "-w" [ "s6-log" "/var/log/synit" ]
             "fdswap" "1" "2"
           ]));
         };
+
+        # Activate as a child of PID 1.
+        activation = {
+          deps = [ "logger" "pid1" ];
+          text = quoteExecline [
+            "foreground" [
+              # Stdio is reserved for communication
+              # between PID 1 and the system-bus.
+              "fdclose" "0"
+              "fdmove" "-c" "1" "2"
+              "@systemConfig@/activate"
+            ]
+          ];
+        };
+
         syndicate-server = {
-          deps = [ "logger" ];
+          deps = [ "activation" "logger" ];
           text = mkDefault [
             "syndicate-server"
             "--inferior"
@@ -92,7 +111,7 @@ in
             "--config" "${./boot.pr}"
           ];
         };
-        };
+      };
     };
 
     environment.systemPackages = synitPackages ++ [
@@ -102,9 +121,14 @@ in
     # Only tested with mdevd.
     services.mdevd.enable = mkDefault true;
 
-    system.activation.scripts.synit-config = {
+    system.activation.scripts.synitConfig = {
       deps = [ "specialfs" ];
-      text = "install --mode=644 --directory /run/synit/config/{core,machine,network,profile,state}";
+      text = ''
+        for D in /etc/syndicate/core /run/synit/config/{core,machine,network,profile,state}; do
+          s6-mkdir -m 750 -p $D
+          s6-chown -g 1 $D
+        done
+      '';
     };
 
   };

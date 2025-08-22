@@ -60,8 +60,8 @@ in
         });
     };
 
-    system.activation.scripts.synit-profile = {
-      deps = [ "synit-config" ];
+    system.activation.scripts.synitProfile = {
+      deps = [ "synitConfig" ];
       text = ''
         mkdir -p /run/synit/config/profile/
 
